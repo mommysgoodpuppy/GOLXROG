@@ -1,7 +1,8 @@
 import './style.css';
 import * as THREE from 'three';
 // import { ARButton } from 'three/examples/jsm/webxr/ARButton.js'; // Removed
-import { initGOL, animateGOL } from './GOLSimulation'; // Import GOL functions
+// import { initGOL, animateGOL } from './GOLSimulation'; // Old GOL
+import { init as initSimpleGOL, animate as animateSimpleGOL } from './SimpleGOL'; // New Simple GOL
 
 /* import { XRDevice, metaQuest3 } from 'iwer';
 
@@ -17,7 +18,6 @@ let controller1: THREE.XRTargetRaySpace;
 let sphere0: THREE.Mesh;
 let sphere1: THREE.Mesh;
 
-const controllerSelecting: boolean[] = [false, false];
 let xrSession: XRSession | null = null;
 let arButton: HTMLButtonElement;
 
@@ -138,38 +138,28 @@ function init() {
 
   controller0 = renderer.xr.getController(0);
   scene.add(controller0);
-  controller0.addEventListener('selectstart', () => { controllerSelecting[0] = true; });
-  controller0.addEventListener('selectend', () => { controllerSelecting[0] = false; });
   controller0.addEventListener('connected', (event) => {
     if (event.data && event.data.handedness) {
       console.log(`Controller 0 connected: ${event.data.handedness}`);
-      if(sphere0) sphere0.visible = true;
     }
   });
   controller0.addEventListener('disconnected', () => {
     console.log('Controller 0 disconnected');
-    if(sphere0) sphere0.visible = false;
-    controllerSelecting[0] = false;
   });
 
   controller1 = renderer.xr.getController(1);
   scene.add(controller1);
-  controller1.addEventListener('selectstart', () => { controllerSelecting[1] = true; });
-  controller1.addEventListener('selectend', () => { controllerSelecting[1] = false; });
   controller1.addEventListener('connected', (event) => {
     if (event.data && event.data.handedness) {
       console.log(`Controller 1 connected: ${event.data.handedness}`);
-      if(sphere1) sphere1.visible = true;
     }
   });
   controller1.addEventListener('disconnected', () => {
     console.log('Controller 1 disconnected');
-    if(sphere1) sphere1.visible = false;
-    controllerSelecting[1] = false;
   });
 
   const sphereRadius = 0.03;
-  const sphereMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00, opacity: 0.5, transparent: true });
+  const sphereMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 });
 
   sphere0 = new THREE.Mesh(new THREE.SphereGeometry(sphereRadius, 16, 16), sphereMaterial);
   sphere0.visible = false;
@@ -183,7 +173,7 @@ function init() {
   light.position.set(0.5, 1, 0.25);
   scene.add(light);
 
-  initGOL(scene, renderer);
+  initSimpleGOL(scene, renderer); // Use new SimpleGOL init
 
   window.addEventListener('resize', onWindowResize, false);
 }
@@ -199,11 +189,11 @@ function animate() {
 }
 
 function updateControllerSpheres() {
-  if (sphere0 && sphere0.visible && controller0) {
+  if (sphere0 && sphere0.visible) {
     sphere0.position.setFromMatrixPosition(controller0.matrixWorld);
     sphere0.quaternion.setFromRotationMatrix(controller0.matrixWorld);
   }
-  if (sphere1 && sphere1.visible && controller1) {
+  if (sphere1 && sphere1.visible) {
     sphere1.position.setFromMatrixPosition(controller1.matrixWorld);
     sphere1.quaternion.setFromRotationMatrix(controller1.matrixWorld);
   }
@@ -211,6 +201,7 @@ function updateControllerSpheres() {
 
 function render() {
   updateControllerSpheres();
-  animateGOL(Date.now(), [controller0, controller1], controllerSelecting);
+  animateSimpleGOL(); // SimpleGOL animate doesn't require arguments like the old one
+
   renderer.render(scene, camera);
 }
