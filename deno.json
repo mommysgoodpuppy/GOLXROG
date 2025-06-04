@@ -11,6 +11,7 @@
   "imports": {
     "@deno/vite-plugin": "npm:@deno/vite-plugin@^1.0.4",
     "@types/three": "npm:@types/three@^0.177.0",
+    "iwer": "npm:iwer@^2.0.1",
     "three": "npm:three@^0.177.0",
     "vite": "npm:vite@^6.1.1"
   }

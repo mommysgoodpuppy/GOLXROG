@@ -1,20 +1,124 @@
 import './style.css';
 import * as THREE from 'three';
-import { ARButton } from 'three/examples/jsm/webxr/ARButton.js';
+// import { ARButton } from 'three/examples/jsm/webxr/ARButton.js'; // Removed
+import { initGOL, animateGOL } from './GOLSimulation'; // Import GOL functions
+
+/* import { XRDevice, metaQuest3 } from 'iwer';
+
+const xrDevice = new XRDevice(metaQuest3);
+xrDevice.installRuntime(); */
 
 let camera: THREE.PerspectiveCamera;
 let scene: THREE.Scene;
 let renderer: THREE.WebGLRenderer;
-let cube: THREE.Mesh;
 
-// Variables for controllers and spheres
 let controller0: THREE.XRTargetRaySpace;
 let controller1: THREE.XRTargetRaySpace;
 let sphere0: THREE.Mesh;
 let sphere1: THREE.Mesh;
 
+const controllerSelecting: boolean[] = [false, false];
+let xrSession: XRSession | null = null;
+let arButton: HTMLButtonElement;
+
 init();
 animate();
+
+function setupManualARButton() {
+  arButton = document.createElement('button');
+  arButton.id = 'ar-button';
+  arButton.textContent = 'Enter AR';
+  arButton.style.position = 'absolute';
+  arButton.style.bottom = '20px';
+  arButton.style.left = '50%';
+  arButton.style.transform = 'translateX(-50%)';
+  arButton.style.padding = '12px 24px';
+  arButton.style.border = '1px solid #fff';
+  arButton.style.borderRadius = '4px';
+  arButton.style.background = 'rgba(0, 0, 0, 0.5)';
+  arButton.style.color = 'white';
+  arButton.style.font = 'normal 18px sans-serif';
+  arButton.style.zIndex = '999';
+  arButton.style.cursor = 'pointer';
+
+  arButton.onmouseenter = () => { arButton.style.background = 'rgba(0, 0, 0, 0.7)'; };
+  arButton.onmouseleave = () => { arButton.style.background = 'rgba(0, 0, 0, 0.5)'; };
+
+  arButton.addEventListener('click', async () => {
+    if (xrSession) {
+      try {
+        await xrSession.end();
+        // xrSession will be set to null by the 'end' event listener below
+      } catch (error) {
+        console.error('Error ending XR session:', error);
+        // Reset button state even if end fails for some reason
+        xrSession = null;
+        arButton.textContent = 'Enter AR';
+        arButton.disabled = false;
+      }
+    } else {
+      if (navigator.xr) {
+        try {
+          const supported = await navigator.xr.isSessionSupported('immersive-ar');
+          if (supported) {
+            const session = await navigator.xr.requestSession('immersive-ar',
+              { requiredFeatures: ['hit-test'] }
+            );
+            onSessionStarted(session);
+          } else {
+            arButton.textContent = 'AR Not Supported';
+            arButton.disabled = true;
+            console.warn('immersive-ar session not supported');
+          }
+        } catch (error) {
+          console.error('Error requesting AR session:', error);
+          arButton.textContent = 'AR Failed';
+          arButton.disabled = true;
+        }
+      } else {
+        arButton.textContent = 'WebXR Not Available';
+        arButton.disabled = true;
+        console.warn('WebXR API not available');
+      }
+    }
+  });
+  document.body.appendChild(arButton);
+}
+
+async function onSessionStarted(session: XRSession) {
+  xrSession = session;
+  arButton.textContent = 'Exit AR';
+  arButton.disabled = false;
+
+  session.addEventListener('end', onSessionEnded);
+
+  try {
+    // Explicitly set a reference space type suitable for AR before setting the session.
+    // 'local' is generally good for placing objects in the user's environment.
+    // If 'local' fails, 'viewer' could be another option.
+    renderer.xr.setReferenceSpaceType('local');
+    await renderer.xr.setSession(session);
+  } catch (error) {
+    console.error('Error setting renderer XR session:', error);
+    // Clean up if setting session fails
+    xrSession = null;
+    arButton.textContent = 'Enter AR';
+    arButton.disabled = false;
+  }
+}
+
+function onSessionEnded() {
+  if (xrSession) {
+    xrSession.removeEventListener('end', onSessionEnded);
+    xrSession = null;
+  }
+  arButton.textContent = 'Enter AR';
+  arButton.disabled = false;
+  // Important: Reset renderer's session as well
+  // This is implicitly handled by Three.js when a session ends or is replaced,
+  // but good to be aware of. If issues arise, one might need:
+  // await renderer.xr.setSession(null);
+}
 
 function init() {
   const container = document.createElement('div');
@@ -30,63 +134,56 @@ function init() {
   renderer.setClearAlpha(0);
   container.appendChild(renderer.domElement);
 
-  const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-  const material = new THREE.MeshNormalMaterial();
-  cube = new THREE.Mesh(geometry, material);
-  cube.position.set(0, 0, -1);
-  scene.add(cube);
+  setupManualARButton(); // Use the manual button
 
-  document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
-
-  // Setup controllers
   controller0 = renderer.xr.getController(0);
-  scene.add(controller0); // Add to scene, might hold a ray model later
-
-  controller1 = renderer.xr.getController(1);
-  scene.add(controller1); // Add to scene
-
-  // Create sphere geometry and material for visualization
-  const sphereRadius = 0.03; // Small sphere
-  // Material matching memory: opacity 0.5
-  const sphereMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00, opacity: 0.5, transparent: true });
-
-  // Create sphere for controller 0
-  sphere0 = new THREE.Mesh(new THREE.SphereGeometry(sphereRadius, 16, 16), sphereMaterial);
-  sphere0.visible = false; // Initially invisible
-  scene.add(sphere0); // Add sphere directly to the scene
-
-  // Create sphere for controller 1
-  sphere1 = new THREE.Mesh(new THREE.SphereGeometry(sphereRadius, 16, 16), sphereMaterial.clone()); // Clone material
-  sphere1.visible = false; // Initially invisible
-  scene.add(sphere1); // Add sphere directly to the scene
-
-  // Light for Phong material
-  const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-  light.position.set(0.5, 1, 0.25);
-  scene.add(light);
-
-  // Event listeners for controller connection
+  scene.add(controller0);
+  controller0.addEventListener('selectstart', () => { controllerSelecting[0] = true; });
+  controller0.addEventListener('selectend', () => { controllerSelecting[0] = false; });
   controller0.addEventListener('connected', (event) => {
-    if (event.data && event.data.handedness) { // event.data is XRInputSource
+    if (event.data && event.data.handedness) {
       console.log(`Controller 0 connected: ${event.data.handedness}`);
-      sphere0.visible = true;
+      if(sphere0) sphere0.visible = true;
     }
   });
   controller0.addEventListener('disconnected', () => {
     console.log('Controller 0 disconnected');
-    sphere0.visible = false;
+    if(sphere0) sphere0.visible = false;
+    controllerSelecting[0] = false;
   });
 
+  controller1 = renderer.xr.getController(1);
+  scene.add(controller1);
+  controller1.addEventListener('selectstart', () => { controllerSelecting[1] = true; });
+  controller1.addEventListener('selectend', () => { controllerSelecting[1] = false; });
   controller1.addEventListener('connected', (event) => {
     if (event.data && event.data.handedness) {
       console.log(`Controller 1 connected: ${event.data.handedness}`);
-      sphere1.visible = true;
+      if(sphere1) sphere1.visible = true;
     }
   });
   controller1.addEventListener('disconnected', () => {
     console.log('Controller 1 disconnected');
-    sphere1.visible = false;
+    if(sphere1) sphere1.visible = false;
+    controllerSelecting[1] = false;
   });
+
+  const sphereRadius = 0.03;
+  const sphereMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00, opacity: 0.5, transparent: true });
+
+  sphere0 = new THREE.Mesh(new THREE.SphereGeometry(sphereRadius, 16, 16), sphereMaterial);
+  sphere0.visible = false;
+  scene.add(sphere0);
+
+  sphere1 = new THREE.Mesh(new THREE.SphereGeometry(sphereRadius, 16, 16), sphereMaterial.clone());
+  sphere1.visible = false;
+  scene.add(sphere1);
+
+  const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+  light.position.set(0.5, 1, 0.25);
+  scene.add(light);
+
+  initGOL(scene, renderer);
 
   window.addEventListener('resize', onWindowResize, false);
 }
@@ -103,7 +200,6 @@ function animate() {
 
 function updateControllerSpheres() {
   if (sphere0 && sphere0.visible && controller0) {
-    // controller0.matrixWorld already contains the world transform
     sphere0.position.setFromMatrixPosition(controller0.matrixWorld);
     sphere0.quaternion.setFromRotationMatrix(controller0.matrixWorld);
   }
@@ -114,13 +210,7 @@ function updateControllerSpheres() {
 }
 
 function render() {
-  if (cube) {
-    cube.rotation.x += 0.01;
-    cube.rotation.y += 0.01;
-  }
-
-  updateControllerSpheres(); // Manually update sphere positions
-
+  updateControllerSpheres();
+  animateGOL(Date.now(), [controller0, controller1], controllerSelecting);
   renderer.render(scene, camera);
 }
-

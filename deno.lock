@@ -3,6 +3,7 @@
   "specifiers": {
     "npm:@deno/vite-plugin@^1.0.4": "1.0.4_vite@6.3.5__picomatch@4.0.2",
     "npm:@types/three@0.177": "0.177.0",
+    "npm:iwer@^2.0.1": "2.0.1",
     "npm:three@0.177": "0.177.0",
     "npm:vite@*": "6.3.5_picomatch@4.0.2",
     "npm:vite@^6.1.1": "6.3.5_picomatch@4.0.2"
@@ -318,6 +319,15 @@
       "os": ["darwin"],
       "scripts": true
     },
+    "gl-matrix@3.4.3": {
+      "integrity": "sha512-wcCp8vu8FT22BnvKVPjXa/ICBWRq/zjFfdofZy1WSpQZpphblv12/bOQLBC1rMM7SGOFS9ltVmKOHil5+Ml7gA=="
+    },
+    "iwer@2.0.1": {
+      "integrity": "sha512-kNjh8DDWGSnbiK6jKcVLYVRLFCMBQ4+sVyHZ3La4EJYTCTY+Trrnagf6z3oCdNpC4OTiwcPdakunTAqZhoWK+A==",
+      "dependencies": [
+        "gl-matrix"
+      ]
+    },
     "meshoptimizer@0.18.1": {
       "integrity": "sha512-ZhoIoL7TNV4s5B6+rx5mC//fw8/POGyNxS/DZyCJeiZ12ScLfVwRE/GfsxwiTkMYYD5DmK2/JXnEVXqL4rF+Sw=="
     },
@@ -402,6 +412,7 @@
     "dependencies": [
       "npm:@deno/vite-plugin@^1.0.4",
       "npm:@types/three@0.177",
+      "npm:iwer@^2.0.1",
       "npm:three@0.177",
       "npm:vite@^6.1.1"
     ]
