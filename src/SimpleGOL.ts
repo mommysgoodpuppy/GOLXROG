@@ -87,15 +87,19 @@ const handDebugMeshes = [
     new THREE.Mesh(
         new THREE.SphereGeometry(0.05, 16, 8),
         new THREE.MeshBasicMaterial({ 
+            color: 0xff0000,
             transparent: true,
-            opacity: 0.0 // Invisible as per snippet
+            opacity: 0.0, // Invisible as per snippet
+            depthWrite: false // Prevent writing to depth buffer
         })
     ),
     new THREE.Mesh(
         new THREE.SphereGeometry(0.05, 16, 8),
         new THREE.MeshBasicMaterial({ 
+            color: 0xff0000,
             transparent: true,
-            opacity: 0.0 // Invisible as per snippet
+            opacity: 0.0, // Invisible as per snippet
+            depthWrite: false // Prevent writing to depth buffer
         })
     )
 ];
