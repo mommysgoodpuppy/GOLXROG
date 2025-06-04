@@ -93,18 +93,16 @@ const createEmptyGrid = (size: number): Record<number, Record<number, Record<num
     return grid;
 };
 
-const createBoundingBox = (): THREE.Mesh => {
+const createBoundingBox = () => {
     const boxSize = gameState.size * 0.011;
     const geometry = new THREE.BoxGeometry(boxSize, boxSize, boxSize);
     const material = new THREE.MeshBasicMaterial({
         color: 0x000000,
-        side: THREE.BackSide,
-        transparent: true,
-        opacity: 0.05 // As per memory 5176d8b4-9309-4790-a1a8-a6b2781a4ddb
+        side: THREE.BackSide  // Only render inner faces 
     });
     const boundingBox = new THREE.Mesh(geometry, material);
     return boundingBox;
-};
+}; 
 
 const isNearCell = (cellX: number, cellY: number, cellZ: number, handPos: THREE.Vector3): boolean => {
     const cellWorldX = (cellX - gameState.size / 2) * 0.011;
@@ -301,23 +299,17 @@ const updateInstancedMesh = () => {
     }
 };
 
-const createCubeMaterials = () => {
-    // Main white cube material with slight transparency 
+const createCubeMaterials = (): [THREE.MeshBasicMaterial, THREE.MeshBasicMaterial] => {
     const mainMaterial = new THREE.MeshBasicMaterial({
         color: 0xFFFFFF,
-        transparent: true,
-        opacity: 0.9
     });
-
-    // Black edge material 
     const edgeMaterial = new THREE.MeshBasicMaterial({
         color: 0x000000,
         transparent: true,
-        opacity: 0.3
+        opacity: 0.9
     });
-
     return [mainMaterial, edgeMaterial];
-}; 
+};
 
 export const initGOL = (scene: THREE.Scene, renderer: THREE.WebGLRenderer) => {
     gameState.sceneRef = scene; // Store scene reference
