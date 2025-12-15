@@ -18,6 +18,9 @@ interface GameState {
     bias: number;
 }
 
+const ENABLE_GOL_DEBUG = false;
+const AUTO_RESEED_ON_EXTINCTION = true;
+
 // State
 const gameState: GameState = {
     size: 30,
@@ -36,8 +39,16 @@ const gameState: GameState = {
     bias: 0.59
 };
 
-let localScene: THREE.Scene;
 let localRenderer: THREE.WebGLRenderer;
+let golRoot: THREE.Group | null = null;
+let lastLoggedInstanceCount = -1;
+let boundingBoxMesh: THREE.Mesh | null = null;
+
+const debugLog = (...args: unknown[]) => {
+    if (ENABLE_GOL_DEBUG) {
+        console.log('[GOL]', ...args);
+    }
+};
 
 const createBoundingBox = (): THREE.Mesh => {
     const boxSize = gameState.size * 0.011;
@@ -159,6 +170,36 @@ const addCellsNearHand = () => {
     }
 };
 
+const seedInitialPattern = () => {
+    if (!gameState.grid) return;
+    const center = Math.floor(gameState.size / 2);
+    const seeds = [
+        [0, 0, 0],
+        [1, 0, 0],
+        [-1, 0, 0],
+        [0, 1, 0],
+        [0, -1, 0],
+        [0, 0, 1],
+        [0, 0, -1],
+    ];
+
+    seeds.forEach(([dx, dy, dz]) => {
+        const x = center + dx;
+        const y = center + dy;
+        const z = center + dz;
+        if (
+            gameState.grid &&
+            x >= 0 && x < gameState.size &&
+            y >= 0 && y < gameState.size &&
+            z >= 0 && z < gameState.size
+        ) {
+            gameState.grid[x][y][z] = 1;
+        }
+    });
+
+    debugLog('Seeded initial pattern with', seeds.length, 'cells.');
+};
+
 const countNeighbors = (x: number, y: number, z: number): number => {
     if (!gameState.grid) return 0;
     let count = 0;
@@ -233,6 +274,12 @@ const updateGrid = () => {
 
     [gameState.grid, gameState.nextGrid] = [gameState.nextGrid, gameState.grid];
     updateInstancedMesh();
+
+    if (AUTO_RESEED_ON_EXTINCTION && gameState.activeInstances === 0) {
+        debugLog('All cells extinct - reseeding.');
+        seedInitialPattern();
+        updateInstancedMesh();
+    }
 };
 
 const updateInstancedMesh = () => {
@@ -266,11 +313,17 @@ const updateInstancedMesh = () => {
         gameState.edgeInstancedMesh.instanceMatrix.needsUpdate = true;
     }
     gameState.activeInstances = instanceCount;
+    if (ENABLE_GOL_DEBUG && instanceCount !== lastLoggedInstanceCount) {
+        lastLoggedInstanceCount = instanceCount;
+        debugLog('Active instances:', instanceCount);
+    }
 };
 
 export const init = (scene: THREE.Scene, renderer: THREE.WebGLRenderer) => {
-    localScene = scene;
     localRenderer = renderer;
+    golRoot = new THREE.Group();
+    golRoot.name = 'SimpleGOLRoot';
+    scene.add(golRoot);
 
     const cubeGeom = new THREE.BoxGeometry(0.008, 0.008, 0.008);
     const [mainMaterial, edgeMaterial] = createCubeMaterials();
@@ -291,17 +344,24 @@ export const init = (scene: THREE.Scene, renderer: THREE.WebGLRenderer) => {
     gameState.grid = createEmptyGrid(gameState.size);
     gameState.nextGrid = createEmptyGrid(gameState.size);
     initRecentlyAdded();
+    seedInitialPattern();
+    updateInstancedMesh();
     
     const boundingBox = createBoundingBox();
-    localScene.add(boundingBox);
+    golRoot.add(boundingBox);
+    boundingBoxMesh = boundingBox;
     
-    localScene.add(gameState.instancedMesh);
-    if (gameState.edgeInstancedMesh) localScene.add(gameState.edgeInstancedMesh);
-    localScene.add(handDebugMeshes[0]);
-    localScene.add(handDebugMeshes[1]);
+    golRoot.add(gameState.instancedMesh);
+    if (gameState.edgeInstancedMesh) golRoot.add(gameState.edgeInstancedMesh);
+    golRoot.add(handDebugMeshes[0]);
+    golRoot.add(handDebugMeshes[1]);
 
-    gameState.instancedMesh.count = 0;
-    if (gameState.edgeInstancedMesh) gameState.edgeInstancedMesh.count = 0;
+    if (gameState.instancedMesh) {
+        gameState.instancedMesh.count = gameState.activeInstances;
+    }
+    if (gameState.edgeInstancedMesh) {
+        gameState.edgeInstancedMesh.count = gameState.activeInstances;
+    }
 
     localRenderer.domElement.addEventListener('click', () => {
         if (gameState.instancedMesh && gameState.instancedMesh.material instanceof THREE.MeshBasicMaterial) {
@@ -314,6 +374,18 @@ export const init = (scene: THREE.Scene, renderer: THREE.WebGLRenderer) => {
         else if (gameState.bias < 0.25) gameState.bias = 0.25; // Ensure bias loops correctly and stays in range
         console.log("New Bias: ", gameState.bias.toFixed(2));
     });
+
+    if (ENABLE_GOL_DEBUG && typeof window !== 'undefined') {
+        (window as unknown as Record<string, unknown>).golDebug = {
+            state: gameState,
+            root: golRoot
+        };
+        debugLog('Attached golDebug handle on window.');
+    }
+
+    if (golRoot) {
+        debugLog('SimpleGOL initialized. Root world position:', golRoot.getWorldPosition(new THREE.Vector3()));
+    }
 };
 
 export const animate = () => {
@@ -325,9 +397,12 @@ export const animate = () => {
     let handInteracted = false;
     if (controller0 && controller0.matrixWorld) { // Check matrixWorld as an indicator of presence
         gameState.handPositions[0].setFromMatrixPosition(controller0.matrixWorld);
-        localScene.worldToLocal(gameState.handPositions[0]); // Convert to GOL local space if scene is offset
-        
-        handDebugMeshes[0].position.setFromMatrixPosition(controller0.matrixWorld);
+        if (golRoot) {
+            golRoot.worldToLocal(gameState.handPositions[0]); // Convert to GOL local space if scene is offset
+            handDebugMeshes[0].position.copy(gameState.handPositions[0]);
+        } else {
+            handDebugMeshes[0].position.copy(gameState.handPositions[0]);
+        }
         handDebugMeshes[0].updateMatrixWorld(true);
         handInteracted = true;
     } else {
@@ -336,9 +411,12 @@ export const animate = () => {
     
     if (controller1 && controller1.matrixWorld) {
         gameState.handPositions[1].setFromMatrixPosition(controller1.matrixWorld);
-        localScene.worldToLocal(gameState.handPositions[1]);
-
-        handDebugMeshes[1].position.setFromMatrixPosition(controller1.matrixWorld);
+        if (golRoot) {
+            golRoot.worldToLocal(gameState.handPositions[1]);
+            handDebugMeshes[1].position.copy(gameState.handPositions[1]);
+        } else {
+            handDebugMeshes[1].position.copy(gameState.handPositions[1]);
+        }
         handDebugMeshes[1].updateMatrixWorld(true);
         handInteracted = true;
     } else {
@@ -352,5 +430,12 @@ export const animate = () => {
     if(currentTime - gameState.lastUpdate > gameState.updateInterval) {
         updateGrid();
         gameState.lastUpdate = currentTime;
+    }
+};
+
+export const getRootObject = (): THREE.Object3D | null => golRoot;
+export const setBoundingBoxVisibility = (visible: boolean) => {
+    if (boundingBoxMesh) {
+        boundingBoxMesh.visible = visible;
     }
 };
