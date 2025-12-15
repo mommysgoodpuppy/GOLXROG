@@ -1,1 +1,1 @@
-[golxrog.deno.dev](golxrog.deno.dev)
+[petplay.fi/golxr.html](https://petplay.fi/golxr.html)
